@@ -15,7 +15,6 @@ permissions:
 
 jobs:
   ocr-e2e:
-    if: github.event.repository.fork == false
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
