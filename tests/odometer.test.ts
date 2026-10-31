@@ -55,4 +55,55 @@ describe('POST /odometer/reading upload validation', () => {
 
     await upload(filename, type, oversized).expect(413);
   });
+
+  it.each(images)('returns 415 for text disguised as $type', async ({ filename, type }) => {
+    await upload(filename, type, Buffer.from('This is text, not an image'))
+      .expect(415)
+      .expect('Content-Type', /application\/json/);
+  });
+
+  it.each(images)('returns 400 for corrupted $type data', async ({ filename, type, bytes }) => {
+    // Preserve the image signature but replace the remaining data with junk.
+    // Recognizing the file format alone must not count as validating the image.
+    const corrupted = Buffer.concat([bytes.subarray(0, 16), Buffer.from('corrupted image data')]);
+
+    await upload(filename, type, corrupted)
+      .expect(400)
+      .expect('Content-Type', /application\/json/);
+  });
+
+  it('returns 400 for multipart data without a boundary parameter', async () => {
+    await request(app)
+      .post('/odometer/reading')
+      .set('Content-Type', 'multipart/form-data')
+      .send('invalid multipart data')
+      .expect(400)
+      .expect('Content-Type', /application\/json/);
+  });
+
+  it('returns 400 for an incomplete multipart body', async () => {
+    const body = [
+      '--test-boundary',
+      'Content-Disposition: form-data; name="image"; filename="image.png"',
+      'Content-Type: image/png',
+      '',
+      'incomplete file data',
+      // The closing multipart boundary is deliberately missing.
+    ].join('\r\n');
+
+    await request(app)
+      .post('/odometer/reading')
+      .set('Content-Type', 'multipart/form-data; boundary=test-boundary')
+      .send(body)
+      .expect(400)
+      .expect('Content-Type', /application\/json/);
+  });
+
+  it.each(images)('returns 400 for $type in an unexpected file field', async ({ filename, type, bytes }) => {
+    await request(app)
+      .post('/odometer/reading')
+      .attach('photo', bytes, { filename, contentType: type })
+      .expect(400)
+      .expect('Content-Type', /application\/json/);
+  });
 });
