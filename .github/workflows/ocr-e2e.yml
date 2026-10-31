@@ -1,12 +1,21 @@
 name: OCR E2E
 
-on: workflow_dispatch
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: ocr-e2e
+  queue: max
 
 permissions:
   contents: read
 
 jobs:
   ocr-e2e:
+    if: github.event.repository.fork == false
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -18,6 +27,7 @@ jobs:
       - run: npm ci
       - name: Run OpenAI OCR E2E tests
         env:
+          OCR_PROVIDER: openai
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
           if [[ ! "$OPENAI_API_KEY" =~ [^[:space:]] ]]; then

@@ -1,5 +1,6 @@
+import { unreadable } from '../fixtures/ocr';
 import OpenAI from 'openai';
-import { OpenAiOcrProvider } from '../src/ocr/openai.provider';
+import { OpenAiOcrProvider } from '../../src/ocr/openai.provider';
 
 jest.mock('openai', () => ({ __esModule: true, default: jest.fn() }));
 
@@ -7,10 +8,6 @@ describe('OpenAiOcrProvider', () => {
   const originalEnv = process.env;
   const createResponse = jest.fn();
   const image = Buffer.from([0xff, 0xd8, 0xff, 0xd9]);
-  const unreadable = {
-    error: 'UNREADABLE_IMAGE',
-    message: 'Could not extract a mileage reading from the provided image',
-  };
 
   beforeEach(() => {
     process.env = { ...originalEnv, OPENAI_API_KEY: 'test-key-not-a-real-credential' };

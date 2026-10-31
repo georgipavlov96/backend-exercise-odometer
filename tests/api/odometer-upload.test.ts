@@ -1,10 +1,9 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import request from 'supertest';
-import { app } from '../src/app';
+import { png, postReading } from '../fixtures/upload';
 
 const mockResult = { reading: 62690.5, unit: 'miles', confidence: 'high' } as const;
-jest.mock('../src/ocr', () => ({
+jest.mock('../../src/ocr', () => ({
   createOcrProvider: () => ({ extractOdometerReading: async () => mockResult }),
 }));
 
@@ -15,23 +14,18 @@ const images = [
   {
     filename: 'odometer.jpeg',
     type: 'image/jpeg',
-    bytes: readFileSync(join(__dirname, '../images/d621e37e-7c0f-49a4-8a19-d628b1e82a33.jpeg')),
+    bytes: readFileSync(join(__dirname, '../../images/d621e37e-7c0f-49a4-8a19-d628b1e82a33.jpeg')),
   },
   {
     filename: 'image.png',
     type: 'image/png',
-    // A valid 1x1 PNG; accepting uploads does not depend on readable mileage.
-    bytes: Buffer.from(
-      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=',
-      'base64',
-    ),
+    bytes: png,
   },
 ];
 
 describe('POST /odometer/reading upload validation', () => {
   function upload(filename: string, type: string, bytes: Buffer) {
-    return request(app)
-      .post('/odometer/reading')
+    return postReading()
       .attach('image', bytes, { filename, contentType: type });
   }
 
@@ -40,8 +34,7 @@ describe('POST /odometer/reading upload validation', () => {
   });
 
   it('returns 400 when the image file is missing', async () => {
-    await request(app)
-      .post('/odometer/reading')
+    await postReading()
       .field('description', 'No image attached')
       .expect(400);
   });
@@ -78,8 +71,7 @@ describe('POST /odometer/reading upload validation', () => {
   });
 
   it('returns 400 for multipart data without a boundary parameter', async () => {
-    await request(app)
-      .post('/odometer/reading')
+    await postReading()
       .set('Content-Type', 'multipart/form-data')
       .send('invalid multipart data')
       .expect(400)
@@ -96,8 +88,7 @@ describe('POST /odometer/reading upload validation', () => {
       // The closing multipart boundary is deliberately missing.
     ].join('\r\n');
 
-    await request(app)
-      .post('/odometer/reading')
+    await postReading()
       .set('Content-Type', 'multipart/form-data; boundary=test-boundary')
       .send(body)
       .expect(400)
@@ -105,8 +96,7 @@ describe('POST /odometer/reading upload validation', () => {
   });
 
   it.each(images)('returns 400 for $type in an unexpected file field', async ({ filename, type, bytes }) => {
-    await request(app)
-      .post('/odometer/reading')
+    await postReading()
       .attach('photo', bytes, { filename, contentType: type })
       .expect(400)
       .expect('Content-Type', /application\/json/);
@@ -116,7 +106,7 @@ describe('POST /odometer/reading upload validation', () => {
     const jpeg = images[0].bytes;
 
     function postJson(body: object | string) {
-      return request(app).post('/odometer/reading').type('json').send(body);
+      return postReading().type('json').send(body);
     }
 
     function expectError(body: object | string, status: number, error: string) {
@@ -129,15 +119,18 @@ describe('POST /odometer/reading upload validation', () => {
       await postJson({ image: bytes.toString('base64') }).expect(200, mockResult);
     });
 
-    it.each([maxFileSize, maxFileSize + 1])('checks the size limit at %i decoded bytes', async size => {
-      // JPEG permits 0xff fill bytes immediately before a marker. Keep the end marker intact.
+    function jpegBodyOfSize(size: number) {
+      // JPEG permits 0xff fill bytes immediately before the end marker.
       const bytes = Buffer.concat([jpeg.subarray(0, -2), Buffer.alloc(size - jpeg.length, 0xff), jpeg.subarray(-2)]);
-      const body = { image: bytes.toString('base64') };
-      if (size === maxFileSize) {
-        await postJson(body).expect(200, mockResult);
-      } else {
-        await expectError(body, 413, 'FILE_TOO_LARGE');
-      }
+      return { image: bytes.toString('base64') };
+    }
+
+    it('accepts a JPEG of exactly 5 MiB after Base64 decoding', async () => {
+      await postJson(jpegBodyOfSize(maxFileSize)).expect(200, mockResult);
+    });
+
+    it('returns 413 for a decoded JPEG one byte over 5 MiB', async () => {
+      await expectError(jpegBodyOfSize(maxFileSize + 1), 413, 'FILE_TOO_LARGE');
     });
 
     it('returns 400 for a missing image', async () => {

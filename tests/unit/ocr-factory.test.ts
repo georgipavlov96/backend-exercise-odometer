@@ -22,15 +22,15 @@ describe('createOcrProvider', () => {
   // Load after configuring the environment, including module initialisation.
   function loadProviders() {
     let modules!: {
-      createOcrProvider: typeof import('../src/ocr/factory').createOcrProvider;
-      MockOcrProvider: typeof import('../src/ocr/mock.provider').MockOcrProvider;
-      OpenAiOcrProvider: typeof import('../src/ocr/openai.provider').OpenAiOcrProvider;
+      createOcrProvider: typeof import('../../src/ocr/factory').createOcrProvider;
+      MockOcrProvider: typeof import('../../src/ocr/mock.provider').MockOcrProvider;
+      OpenAiOcrProvider: typeof import('../../src/ocr/openai.provider').OpenAiOcrProvider;
     };
     jest.isolateModules(() => {
       modules = {
-        ...require('../src/ocr/factory'),
-        ...require('../src/ocr/mock.provider'),
-        ...require('../src/ocr/openai.provider'),
+        ...require('../../src/ocr/factory'),
+        ...require('../../src/ocr/mock.provider'),
+        ...require('../../src/ocr/openai.provider'),
       };
     });
     return modules;

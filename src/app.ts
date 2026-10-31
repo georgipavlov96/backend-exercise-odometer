@@ -1,6 +1,6 @@
-import express, { type ErrorRequestHandler, type Request, type Response } from 'express';
+import express, { type ErrorRequestHandler, type RequestHandler } from 'express';
 import { createOcrProvider } from './ocr';
-import { validateImageUpload } from './upload';
+import { validateImageUpload } from './upload/middleware';
 
 export const app = express();
 
@@ -12,8 +12,10 @@ const handleOcrFailure: ErrorRequestHandler = (_error, _req, res, _next) => {
   res.status(500).json({ error: 'INTERNAL_ERROR', message: 'An internal error occurred' });
 };
 
-app.post('/odometer/reading', validateImageUpload, async (req: Request, res: Response) => {
+const readOdometer: RequestHandler = async (req, res) => {
   const provider = createOcrProvider();
   const result = await provider.extractOdometerReading(res.locals.image, req.file?.originalname);
   res.status('error' in result ? 422 : 200).json(result);
-}, handleOcrFailure);
+};
+
+app.post('/odometer/reading', validateImageUpload, readOdometer, handleOcrFailure);

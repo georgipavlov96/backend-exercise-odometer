@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import request from 'supertest';
-import { app } from '../src/app';
+import { app } from '../../src/app';
 
 /**
  * @jest-environment node
@@ -23,7 +23,7 @@ describe('POST /odometer/reading with OpenAI', () => {
     { filename: 'd621e37e-7c0f-49a4-8a19-d628b1e82a33.jpeg', reading: 154510, format: 'multipart' },
     { filename: 'dbab9932-823e-49ed-80db-1e898d836d5e.jpeg', reading: 205265, format: 'base64' },
   ])('reads $reading from $filename via $format', async ({ filename, reading, format }) => {
-    const image = await readFile(join(__dirname, '../images', filename));
+    const image = await readFile(join(__dirname, '../../images', filename));
     const upload = request(app).post('/odometer/reading');
     if (format === 'multipart') {
       upload.attach('image', image, 'odometer.jpeg');
@@ -39,7 +39,7 @@ describe('POST /odometer/reading with OpenAI', () => {
 
   it('reads 48253 miles from the blurry PNG via multipart', async () => {
     // This synthetic image is deliberately blurred to evaluate degraded-image handling.
-    const image = await readFile(join(__dirname, '../images', 'odometer-blurry.png'));
+    const image = await readFile(join(__dirname, '../../images', 'odometer-blurry.png'));
     const { body } = await request(app).post('/odometer/reading')
       .attach('image', image, 'odometer.png')
       .expect('Content-Type', /json/)

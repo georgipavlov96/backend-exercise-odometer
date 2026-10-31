@@ -15,6 +15,8 @@ export class MockOcrProvider implements OcrProvider {
         return { reading: 154510, unit: 'miles', confidence: 'med' };
       case 'dbab9932-823e-49ed-80db-1e898d836d5e.jpeg':
         return { reading: 205265, unit: 'miles', confidence: 'med' };
+      case 'odometer-blurry.png':
+        return { reading: 48253, unit: 'miles', confidence: 'med' };
       default:
         return unreadable();
     }
