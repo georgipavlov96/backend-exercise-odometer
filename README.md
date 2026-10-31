@@ -32,7 +32,8 @@ The maximum file size is **5 MiB (5,242,880 bytes)**. Uploads are buffered
 in memory, so this limit prevents excessively large uploads and unnecessary
 memory usage while allowing typical odometer photos.
 
-The endpoint currently validates uploads only; OCR is not implemented.
+The endpoint currently validates uploads only; the separate OCR service is not
+yet connected to the route.
 
 | Upload | HTTP status |
 | --- | --- |
@@ -45,7 +46,27 @@ The endpoint currently validates uploads only; OCR is not implemented.
 
 Errors return JSON with `error` and `message` fields.
 
-## OCR unit assumption
+## OCR
+
+`src/ocr/` uses Tesseract.js as its only OCR engine. It runs locally on Node.js
+18+ without credentials, using `Tesseract.recognize(image, 'eng')` with default
+settings. Tesseract may download and cache English model data on first use.
+We chose it for its straightforward Node.js
+integration. There is no image preprocessing or EXIF rotation handling. Blurry
+images, digital displays and rotated photos can produce missing or incorrect
+readings, so the supplied-image acceptance tests may remain failing.
+
+The service accepts a Buffer independently of Express and recognises it once.
+A separate text parser looks for one distinct number with at least four integer
+digits, allowing decimals and comma-separated thousands. This simple heuristic
+ignores small dashboard values but cannot reliably distinguish mileage from other
+large numbers. Missing or conflicting readings and OCR errors return `UNREADABLE_IMAGE`.
+Confidence is a heuristic: `high` requires an explicit unit and a Tesseract
+score of at least 85; otherwise an unambiguous reading is `medium`. Low scores
+alone do not reject a reading, and confidence never resolves conflicting values.
+These scores are not calibrated probabilities of an accurate mileage reading.
+
+### Unit assumption
 
 For OCR results, we will default to `"miles"` when the odometer unit is not
 visible: the exercise uses miles in its example response and does not specify
