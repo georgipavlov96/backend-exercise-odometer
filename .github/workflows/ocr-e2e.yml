@@ -1,0 +1,27 @@
+name: OCR E2E
+
+on: workflow_dispatch
+
+permissions:
+  contents: read
+
+jobs:
+  ocr-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Run OpenAI OCR E2E tests
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          if [[ ! "$OPENAI_API_KEY" =~ [^[:space:]] ]]; then
+            echo "::error::Configure the OPENAI_API_KEY secret to run the OCR E2E tests."
+            exit 1
+          fi
+          npm run test:e2e
