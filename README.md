@@ -45,6 +45,14 @@ The endpoint currently validates uploads only; OCR is not implemented.
 
 Errors return JSON with `error` and `message` fields.
 
+## OCR unit assumption
+
+For OCR results, we will default to `"miles"` when the odometer unit is not
+visible: the exercise uses miles in its example response and does not specify
+how to handle missing units. This is an exercise-specific assumption, not a
+unit confirmed by OCR. When kilometres are explicitly visible, we will return
+`"km"` instead.
+
 ## Overview
 
 **Estimated time:** 3–4 hours
