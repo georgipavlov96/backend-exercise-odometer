@@ -24,8 +24,11 @@ server entry point.
 ## Image uploads
 
 `POST /odometer/reading` accepts one JPEG or PNG file in the `image` field of a
-`multipart/form-data` request. File types are checked using the uploaded MIME
-type. The maximum file size is **5 MiB (5,242,880 bytes)**. Uploads are buffered
+`multipart/form-data` request. After checking the MIME type and file signature,
+the server decodes the full image using `jpeg-js` or `pngjs` to validate its
+contents. JPEG decoding is strict, and PNG checks include chunk CRCs. These are
+the same decoders used by Jimp, without adding the full image-processing package.
+The maximum file size is **5 MiB (5,242,880 bytes)**. Uploads are buffered
 in memory, so this limit prevents excessively large uploads and unnecessary
 memory usage while allowing typical odometer photos.
 
@@ -35,8 +38,9 @@ The endpoint currently validates uploads only; OCR is not implemented.
 | --- | --- |
 | Valid JPEG or PNG | 200, with `{ "status": "accepted" }` |
 | Missing or empty image | 400 |
+| Corrupted JPEG or PNG data | 400 |
 | Malformed upload, unexpected file field, or multiple files | 400 |
-| Unsupported file type | 415 |
+| Unsupported file type or non-image content disguised as JPEG/PNG | 415 |
 | File exceeds 5 MiB | 413 |
 
 Errors return JSON with `error` and `message` fields.
