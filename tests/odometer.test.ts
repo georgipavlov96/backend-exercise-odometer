@@ -3,6 +3,11 @@ import { join } from 'node:path';
 import request from 'supertest';
 import { app } from '../src/app';
 
+const mockResult = { reading: 62690.5, unit: 'miles', confidence: 'high' } as const;
+jest.mock('../src/ocr', () => ({
+  createOcrProvider: () => ({ extractOdometerReading: async () => mockResult }),
+}));
+
 // Upload contract: multipart or Base64 JSON field "image", maximum decoded size 5 MiB.
 // Only upload acceptance/validation is tested here; OCR output is out of scope.
 const maxFileSize = 5 * 1024 * 1024;
@@ -121,7 +126,7 @@ describe('POST /odometer/reading upload validation', () => {
     }
 
     it.each(images)('accepts Base64 $type', async ({ bytes }) => {
-      await postJson({ image: bytes.toString('base64') }).expect(200, { status: 'accepted' });
+      await postJson({ image: bytes.toString('base64') }).expect(200, mockResult);
     });
 
     it.each([maxFileSize, maxFileSize + 1])('checks the size limit at %i decoded bytes', async size => {
@@ -129,7 +134,7 @@ describe('POST /odometer/reading upload validation', () => {
       const bytes = Buffer.concat([jpeg.subarray(0, -2), Buffer.alloc(size - jpeg.length, 0xff), jpeg.subarray(-2)]);
       const body = { image: bytes.toString('base64') };
       if (size === maxFileSize) {
-        await postJson(body).expect(200, { status: 'accepted' });
+        await postJson(body).expect(200, mockResult);
       } else {
         await expectError(body, 413, 'FILE_TOO_LARGE');
       }

@@ -58,8 +58,16 @@ describe('POST /odometer/reading OCR integration', () => {
       message: 'Could not extract a mileage reading from the provided image',
     } as const;
     extract.mockResolvedValue(result);
-    const response = await post().attach('image', png, 'dashboard.png').expect('Content-Type', /json/);
+    const response = await post().attach('image', png, 'dashboard.png').expect(422).expect('Content-Type', /json/);
     expect(response.body).toEqual(result);
+  });
+
+  it('returns a safe OCR error when the provider rejects', async () => {
+    extract.mockRejectedValue(new Error('private provider details'));
+    await post().attach('image', png, 'dashboard.png').expect(500, {
+      error: 'INTERNAL_ERROR',
+      message: 'An internal error occurred',
+    });
   });
 
   it.each([
