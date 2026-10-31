@@ -1,5 +1,20 @@
 # Exercise: Odometer Reading Service
 
+## Local development
+
+Requires Node.js 18 or later and npm.
+
+```
+npm ci
+npm run typecheck
+npm test
+npm run build
+```
+
+TypeScript strict mode is enabled. Jest runs TypeScript tests through ts-jest.
+Source files live in `src/`, tests in `tests/`, and compiled source goes to
+`dist/`. The entry point is currently empty; no service logic has been added.
+
 ## Overview
 
 **Estimated time:** 3–4 hours
