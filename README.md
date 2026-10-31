@@ -21,6 +21,26 @@ while src/index.ts starts the server on port 3000 (or the PORT environment varia
 the app on a temporary port and checks the HTTP response independently of the
 server entry point.
 
+## Image uploads
+
+`POST /odometer/reading` accepts one JPEG or PNG file in the `image` field of a
+`multipart/form-data` request. File types are checked using the uploaded MIME
+type. The maximum file size is **5 MiB (5,242,880 bytes)**. Uploads are buffered
+in memory, so this limit prevents excessively large uploads and unnecessary
+memory usage while allowing typical odometer photos.
+
+The endpoint currently validates uploads only; OCR is not implemented.
+
+| Upload | HTTP status |
+| --- | --- |
+| Valid JPEG or PNG | 200, with `{ "status": "accepted" }` |
+| Missing or empty image | 400 |
+| Malformed upload, unexpected file field, or multiple files | 400 |
+| Unsupported file type | 415 |
+| File exceeds 5 MiB | 413 |
+
+Errors return JSON with `error` and `message` fields.
+
 ## Overview
 
 **Estimated time:** 3–4 hours
