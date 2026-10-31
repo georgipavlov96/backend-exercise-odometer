@@ -13,9 +13,9 @@ npm start
 ```
 
 TypeScript strict mode is enabled. Jest runs TypeScript tests through ts-jest.
-Source files live in `src/`, tests in `tests/`, and compiled source goes to
-`dist/`. The Express app and routes live in `src/app.ts`; `src/index.ts` starts
-the server on port 3000 (or the `PORT` environment variable).
+Source files live in src/, tests in tests/, and compiled output goes to dist/. 
+The Express application and routes are defined in src/app.ts, 
+while src/index.ts starts the server on port 3000 (or the PORT environment variable).
 
 `GET /health` returns HTTP 200 with `{ "status": "ok" }`. The Jest test starts
 the app on a temporary port and checks the HTTP response independently of the
