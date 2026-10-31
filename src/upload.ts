@@ -1,4 +1,4 @@
-import type { RequestHandler } from 'express';
+import { json, type RequestHandler } from 'express';
 import multer from 'multer';
 import { decode as decodeJpeg } from 'jpeg-js';
 import { PNG } from 'pngjs';
@@ -8,9 +8,16 @@ const pngSignature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a
 
 class UnsupportedImageTypeError extends Error {}
 
+const unsupportedFileType = { error: 'UNSUPPORTED_FILE_TYPE', message: 'Upload a JPEG or PNG image' };
+const fileTooLarge = { error: 'FILE_TOO_LARGE', message: 'Image must not exceed 5 MiB' };
+
+const maxImageBytes = 5 * 1024 * 1024;
+// Allow the Base64 representation plus 1 KiB for the JSON envelope.
+const parseJson = json({ limit: 4 * Math.ceil(maxImageBytes / 3) + 1024 });
 const parseImage = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 5 * 1024 * 1024, files: 1 },
+  // Multer signals the limit when it is reached, so allow exactly 5 MiB.
+  limits: { fileSize: maxImageBytes + 1, files: 1 },
   fileFilter: (_req, file, callback) => {
     if (file.mimetype !== 'image/jpeg' && file.mimetype !== 'image/png') {
       callback(new UnsupportedImageTypeError());
@@ -21,33 +28,53 @@ const parseImage = multer({
 }).single('image');
 
 export const validateImageUpload: RequestHandler = (req, res, next) => {
-  parseImage(req, res, (error: unknown) => {
+  const isJson = Boolean(req.is('application/json'));
+  const parse = isJson ? parseJson : parseImage;
+  parse(req, res, (error: unknown) => {
     if (error instanceof UnsupportedImageTypeError) {
-      res.status(415).json({ error: 'UNSUPPORTED_FILE_TYPE', message: 'Upload a JPEG or PNG image' });
+      res.status(415).json(unsupportedFileType);
       return;
     }
-    if (error instanceof multer.MulterError && error.code === 'LIMIT_FILE_SIZE') {
-      res.status(413).json({ error: 'FILE_TOO_LARGE', message: 'Image must not exceed 5 MiB' });
+    if ((error instanceof multer.MulterError && error.code === 'LIMIT_FILE_SIZE') ||
+        (error instanceof Error && 'type' in error && error.type === 'entity.too.large')) {
+      res.status(413).json(fileTooLarge);
       return;
     }
     if (error) {
-      res.status(400).json({ error: 'INVALID_UPLOAD', message: 'Invalid multipart image upload' });
+      res.status(400).json({ error: 'INVALID_UPLOAD', message: isJson ? 'Invalid JSON upload' : 'Invalid multipart image upload' });
       return;
     }
-    if (!req.file) {
+    let data = req.file?.buffer;
+    if (isJson && req.body?.image !== undefined) {
+      const image: unknown = req.body.image;
+      if (typeof image !== 'string') {
+        res.status(400).json({ error: 'INVALID_UPLOAD', message: 'Provide a Base64 string in the image field' });
+        return;
+      }
+      data = Buffer.from(image, 'base64');
+      // Node decodes malformed Base64 permissively. Require a canonical round trip.
+      if (data.toString('base64') !== image) {
+        res.status(400).json({ error: 'INVALID_UPLOAD', message: 'Invalid Base64 image' });
+        return;
+      }
+    }
+    if (!data) {
       res.status(400).json({ error: 'MISSING_IMAGE', message: 'Provide a file in the image field' });
       return;
     }
-    if (req.file.size === 0) {
+    if (data.length === 0) {
       res.status(400).json({ error: 'EMPTY_IMAGE', message: 'Image must not be empty' });
       return;
     }
 
-    const data = req.file.buffer;
+    if (data.length > maxImageBytes) {
+      res.status(413).json(fileTooLarge);
+      return;
+    }
     const isJpeg = data.subarray(0, jpegSignature.length).equals(jpegSignature);
     const isPng = data.subarray(0, pngSignature.length).equals(pngSignature);
     if (!isJpeg && !isPng) {
-      res.status(415).json({ error: 'UNSUPPORTED_FILE_TYPE', message: 'Upload a JPEG or PNG image' });
+      res.status(415).json(unsupportedFileType);
       return;
     }
 
@@ -62,6 +89,7 @@ export const validateImageUpload: RequestHandler = (req, res, next) => {
       res.status(400).json({ error: 'INVALID_IMAGE', message: 'Image data is corrupted or invalid' });
       return;
     }
+    res.locals.image = data;
     next();
   });
 };
