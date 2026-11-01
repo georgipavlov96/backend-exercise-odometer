@@ -1,201 +1,109 @@
-# Exercise: Odometer Reading Service
+# Just Insure odometer OCR API
 
-## Local development
+This take-home service reads a vehicle's total mileage from a dashboard photo. It uses Node.js, Express and strict TypeScript. You can try it locally with the supplied photos and no credentials, or send images to OpenAI for recognition.
 
-Requires Node.js 18 or later and npm.
+## Getting started
 
-```
-npm ci
-npm run typecheck
-npm test
-npm run build
-npm start
-```
+1. **Install prerequisites.** Use Node.js 22 or later with npm, Git and curl. The examples below use Bash (macOS, Linux or Git Bash on Windows).
+2. **Clone and install** the assessment implementation.
 
-TypeScript strict mode is enabled. Jest runs TypeScript tests through ts-jest.
-Source files live in src/, tests in tests/, and compiled output goes to dist/. 
-The Express application and routes are defined in src/app.ts, 
-while src/index.ts starts the server on port 3000 (or the PORT environment variable).
+   ```bash
+   git clone https://github.com/georgipavlov96/backend-exercise-odometer.git
+   cd backend-exercise-odometer
+   npm ci
+   ```
 
-`GET /health` returns HTTP 200 with `{ "status": "ok" }`. The Jest test starts
-the app on a temporary port and checks the HTTP response independently of the
-server entry point.
+3. **Start in mock mode.** Run this from the project directory. It works without an API key, even if you already have a key configured. The application reads environment variables from the process. Its start script does not load a `.env` file.
 
-## Image uploads
+   ```bash
+   OCR_PROVIDER=mock npm start
+   ```
 
-`POST /odometer/reading` accepts one JPEG or PNG file in the `image` field of a
-`multipart/form-data` request. After checking the MIME type and file signature,
-the server decodes the full image using `jpeg-js` or `pngjs` to validate its
-contents. JPEG decoding is strict, and PNG checks include chunk CRCs. These are
-the same decoders used by Jimp, without adding the full image-processing package.
-The maximum file size is **5 MiB (5,242,880 bytes)**. Uploads are buffered
-in memory, so this limit prevents excessively large uploads and unnecessary
-memory usage while allowing typical odometer photos.
+4. **Try a photo.** Leave the server running and open a second terminal in the project directory. The default URL is `http://localhost:3000`. To use another port, set `PORT` in the server environment and adjust the URL below.
 
-The endpoint currently validates uploads only; the separate OCR service is not
-yet connected to the route.
+   ```bash
+   curl http://localhost:3000/health
+   curl -F 'image=@images/odometer-blurry.png;type=image/png' http://localhost:3000/odometer/reading
+   ```
 
-| Upload | HTTP status |
-| --- | --- |
-| Valid JPEG or PNG | 200, with `{ "status": "accepted" }` |
-| Missing or empty image | 400 |
-| Corrupted JPEG or PNG data | 400 |
-| Malformed upload, unexpected file field, or multiple files | 400 |
-| Unsupported file type or non-image content disguised as JPEG/PNG | 415 |
-| File exceeds 5 MiB | 413 |
+   The health check returns `{"status":"ok"}`. The upload returns `{"reading":48253,"unit":"miles","confidence":"med"}` in mock mode.
 
-Errors return JSON with `error` and `message` fields.
+5. **Stop or switch providers.** Press **Ctrl+C** in the server terminal to stop it. For real recognition, obtain a key as described below, then run these commands in that terminal. Paste the key at the hidden prompt. The exported variable also works for local E2E tests in the same shell.
 
-## OCR
+   ```bash
+   read -rsp 'OpenAI API key: ' OPENAI_API_KEY; echo
+   export OPENAI_API_KEY
+   OCR_PROVIDER=openai npm start
+   ```
 
-`src/ocr/` uses Tesseract.js as its only OCR engine. It runs locally on Node.js
-18+ without credentials, using `Tesseract.recognize(image, 'eng')` with default
-settings. Tesseract may download and cache English model data on first use.
-We chose it for its straightforward Node.js
-integration. There is no image preprocessing or EXIF rotation handling. Blurry
-images, digital displays and rotated photos can produce missing or incorrect
-readings, so the supplied-image acceptance tests may remain failing.
+For development, `npm run dev` restarts the server on source changes. `npm run typecheck` checks source and tests, and `npm run build` compiles the application to `dist/`. A build is optional for `npm start`.
 
-The service accepts a Buffer independently of Express and recognises it once.
-A separate text parser looks for one distinct number with at least four integer
-digits, allowing decimals and comma-separated thousands. This simple heuristic
-ignores small dashboard values but cannot reliably distinguish mileage from other
-large numbers. Missing or conflicting readings and OCR errors return `UNREADABLE_IMAGE`.
-Confidence is a heuristic: `high` requires an explicit unit and a Tesseract
-score of at least 85; otherwise an unambiguous reading is `medium`. Low scores
-alone do not reject a reading, and confidence never resolves conflicting values.
-These scores are not calibrated probabilities of an accurate mileage reading.
+## Obtaining an OpenAI API key
 
-### Unit assumption
+1. Sign in or create an account on the [OpenAI Platform](https://platform.openai.com/).
+2. Create a new secret key on the [API keys page](https://platform.openai.com/api-keys).
+3. Configure API billing or ensure your API organization has available credits. ChatGPT Plus/Pro subscriptions and API billing are separate. Eligible subscription credits must be claimed for your API organization. [OpenAI credit guidance](https://developers.openai.com/api/docs/guides/chatgpt-api-credits)
+4. Set the key as the server-side `OPENAI_API_KEY` environment variable using the prompt above. Never commit it to Git or expose it in client-side code. [OpenAI authentication guidance](https://developers.openai.com/api/reference/overview#authentication)
 
-For OCR results, we will default to `"miles"` when the odometer unit is not
-visible: the exercise uses miles in its example response and does not specify
-how to handle missing units. This is an exercise-specific assumption, not a
-unit confirmed by OCR. When kilometres are explicitly visible, we will return
-`"km"` instead.
+## HTTP API
 
-## Overview
+**`POST /odometer/reading`** accepts one JPEG or PNG per request. For multipart uploads, use the `image` file field as in the quick start. Extra files or an unexpected file field return HTTP 400. For JSON, send a single `image` string containing standard Base64 with canonical padding and no whitespace or data URL prefix.
 
-**Estimated time:** 3–4 hours
-
-Please don't spend more than that. We respect your time and will evaluate accordingly.
-
-At Just Insure, we offer pay-per-mile car insurance. One of the ways we verify a customer's mileage is by asking them to submit a photo of their odometer. To process these at scale, we need a service that can automatically extract the mileage reading from an image.
-
-This is a real problem we've solved at Just. Your task is to build a small service that does the same thing.
-
----
-
-## The Task
-
-Build a Node.js HTTP service in TypeScript with a single endpoint:
-
-```
-POST /odometer/reading
-```
-
-The endpoint should:
-
-- Accept an image (JPEG or PNG) of a car odometer
-- Return the mileage reading extracted from the image
-- Handle cases where the reading cannot be determined
-
-### Success Response
-
-```json
-{
-  "reading": 48253,
-  "unit": "miles",
-  "confidence": "high"
-}
-```
-
-### Unreadable Image Response
-
-```json
-{
-  "error": "UNREADABLE_IMAGE",
-  "message": "Could not extract a mileage reading from the provided image"
-}
-```
-
----
-
-## Requirements
-
-### Functional Requirements
-
-- Accept image uploads via:
-    - `multipart/form-data`, or
-    - Base64-encoded image in a JSON payload
-- Extract the numeric odometer reading from the image
-- Return a structured JSON response
-- Handle error cases gracefully:
-    - Missing image
-    - Unsupported file type
-    - Unreadable image
-    - Other invalid inputs
-
-### Non-Functional Requirements
-
-- Written in TypeScript with strict mode enabled
-- Include tests
-- Include a README with setup instructions
-
-### OCR Approach
-
-Use any OCR solution you think is appropriate.
-
-If your chosen approach requires credentials:
-
-- Include clear setup instructions
-- Provide a mock/stub mode so we can evaluate the service without creating an account
-
----
-
-## Test Images
-
-A set of odometer images is included in the `/images` folder of the base repository.
-
-Clone the repository to get started:
+This example encodes an existing JPEG and streams the JSON body to curl. Use the real provider to get a reading from this request. JSON carries no filename for the mock to look up.
 
 ```bash
-git clone https://github.com/just-insure/backend-exercise-odometer.git
+node -e "const fs = require('node:fs'); const image = fs.readFileSync('images/33c24909-e9dd-46d3-8e7f-c44fd9896537.jpeg', 'base64'); process.stdout.write(JSON.stringify({ image }))" |
+  curl -H 'Content-Type: application/json' --data-binary @- http://localhost:3000/odometer/reading
 ```
 
----
+Both formats share the same **5 MiB (5,242,880 byte)** limit on image bytes after Base64 decoding. Uploads are buffered in memory, so the limit prevents excessively large uploads and unnecessary memory usage. The JSON parser also caps the encoded body. Multipart checks the declared MIME type, then both paths check the file signature and decode the image with `jpeg-js` or `pngjs` to catch corruption.
 
-## What to Submit
+**HTTP 200** returns a numeric reading (including decimals) or a valid provider result with `reading: null`. Units are `miles` or `km`. Confidence is `high`, `med` or `low`.
 
-Provide a folder or repository link containing:
+```json
+{"reading":62690.5,"unit":"miles","confidence":"high"}
+```
 
-- Service source code
-- Tests
-- README with setup instructions
-- A copy of your chat with Claude (or a similar AI assistant)
+Errors have an `error` code and a `message`. For example, HTTP 422 returns:
 
-Using AI such as Claude for this task is completely fine, and we ask that you include a copy of your chat/conversation with the AI assistant as part of your submission.
+```json
+{"error":"UNREADABLE_IMAGE","message":"Could not extract a mileage reading from the provided image"}
+```
 
-To be clear about why: we want to see how you think about a problem, and how you work with an agent. We're interested in how you use AI to help *yourself* think through a problem.
+| HTTP | Error code | When it occurs |
+| --- | --- | --- |
+| 400 | `MISSING_IMAGE` / `EMPTY_IMAGE` | The image is missing or contains zero bytes. |
+| 400 | `INVALID_UPLOAD` / `INVALID_IMAGE` | The request or Base64 is malformed, or the JPEG/PNG data is corrupt. |
+| 413 | `FILE_TOO_LARGE` | The image or encoded request exceeds its limit. |
+| 415 | `UNSUPPORTED_FILE_TYPE` | The file type is unsupported. |
+| 422 | `UNREADABLE_IMAGE` | The provider returns an error, including when the OpenAI SDK call fails or its output fails validation. |
+| 500 | `INTERNAL_ERROR` | An unexpected exception escapes the OCR handler. The client receives a generic message. |
 
----
+## OCR design and trade-offs
 
-## How We'll Evaluate Your Submission
+- **Mock** is selected when `OCR_PROVIDER=mock` or `OPENAI_API_KEY` is absent. It maps the five supplied filenames to fixed results and performs no recognition. Unknown, renamed or missing filenames produce HTTP 422, including valid Base64 uploads.
+- **OpenAI** is selected when a key is present and mock mode is not forced. The provider sends validated image bytes to `gpt-4.1-mini` through the Responses API, requests structured JSON and validates the result. This supports new photos but requires network access and incurs API usage. Blurred digits can affect the reading and confidence.
+- **Units** default to miles when no unit is visible because the exercise gives a miles example and leaves the fallback unspecified. This default is an assessment assumption. Explicit kilometres produce `km`.
 
-We are not looking for a production-ready system.
+## Testing
 
-We are evaluating:
+Jest and Supertest start the Express app for HTTP tests. You do not need a separately running server.
 
-- How you think through problems
-- How you structure code
-- How you communicate technical decisions
+| Directory | Coverage | Command |
+| --- | --- | --- |
+| `tests/unit/` | OCR providers, factory selection and component behaviour | `npm test -- tests/unit` |
+| `tests/api/` | Express health, uploads, validation and OCR responses via Supertest, with OCR mocked | `npm test -- tests/api` |
+| `tests/e2e/` | Complete HTTP requests through the real OpenAI provider | `npm run test:e2e` |
+| `tests/fixtures/` | Shared test inputs and expected results | Used by the suites above |
 
----
+**`npm test` runs the unit and API suites without contacting OpenAI.** The separate E2E command requires a valid `OPENAI_API_KEY` and configured API billing or available credits. It forces the real provider and may incur charges. It checks four JPEG fixtures across multipart and Base64 requests, plus the deliberately blurry synthetic PNG (48,253 miles). It checks the expected readings and accepts any supported confidence level.
 
-## Questions?
+## GitHub Actions
 
-If anything is unclear, please contact:
+- **CI** runs on pushes and pull requests. It installs with `npm ci`, type-checks, runs the normal tests and builds on Node.js 22 and 24.
+- **OCR E2E** runs on pushes to `main` or manually via **Actions → OCR E2E → Run workflow**. It runs the real, potentially billable suite on Node.js 24. Runs are queued to avoid overlap and the job has a ten-minute timeout.
+- For OCR E2E, go to **repository Settings → Secrets and variables → Actions → New repository secret**. Name it `OPENAI_API_KEY`, paste the secret key as its value and select **Add secret**. The workflow fails before running the tests if the secret is missing or blank.
 
-[**vitalij@just.insure**](mailto:vitalij@just.insure)
+## AI-assisted development
 
-We'd rather you ask than make assumptions.
+OpenAI Codex assisted with test-driven development, implementation, refactoring and documentation. The conversation transcript is provided separately with the assessment submission.
