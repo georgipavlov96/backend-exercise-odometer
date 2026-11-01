@@ -41,8 +41,13 @@ describe('POST /odometer/reading OCR integration', () => {
     });
   });
 
-  it('preserves a valid null reading', async () => {
-    const result = { reading: null, unit: 'miles', confidence: 'low' } as const;
+  it.each(['high', 'med', 'low'] as const)('returns UNREADABLE_IMAGE for a null reading with %s confidence', async (confidence) => {
+    extract.mockResolvedValue({ reading: null, unit: 'miles', confidence });
+    await postReading().attach('image', png, 'dashboard.png').expect(422, unreadable);
+  });
+
+  it('returns a numeric reading with low confidence', async () => {
+    const result = { reading: 48253, unit: 'miles', confidence: 'low' } as const;
     extract.mockResolvedValue(result);
     await postReading().attach('image', png, 'dashboard.png').expect(200, result);
   });
