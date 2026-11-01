@@ -53,9 +53,12 @@ describe('POST /odometer/reading OCR integration', () => {
     expect(response.body).toEqual(unreadable);
   });
 
-  it('returns a safe OCR error when the provider rejects', async () => {
+  it.each([
+    { format: 'multipart', send: () => postReading().attach('image', png, 'dashboard.png') },
+    { format: 'Base64 JSON', send: () => postReading().send({ image: png.toString('base64') }) },
+  ])('returns a generic internal error for $format when the provider rejects', async ({ send }) => {
     extract.mockRejectedValue(new Error('private provider details'));
-    await postReading().attach('image', png, 'dashboard.png').expect(500, {
+    await send().expect(500, {
       error: 'INTERNAL_ERROR',
       message: 'An internal error occurred',
     });

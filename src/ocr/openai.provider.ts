@@ -37,8 +37,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function parseReading(text: string): OdometerResult {
-  const result: unknown = JSON.parse(text);
-  console.log('OpenAI response:', result);
+  let result: unknown;
+  try {
+    result = JSON.parse(text);
+  } catch {
+    return unreadable();
+  }
   if (!isRecord(result)) return unreadable();
 
   const { reading, unit, confidence } = result;
@@ -58,28 +62,26 @@ export class OpenAiOcrProvider implements OcrProvider {
   });
 
   async extractOdometerReading(image: Buffer, _filename?: string): Promise<OdometerResult> {
-    try {
-      const response = await this.client.responses.create({
-        model: 'gpt-4.1-mini',
-        text: {
-          format: { type: 'json_schema', name: 'odometer_reading', strict: true, schema: responseSchema },
-        },
-        input: [{
-          role: 'user',
-          content: [
-            { type: 'input_text', text: prompt },
-            {
-              type: 'input_image',
-              image_url: `data:image/jpeg;base64,${image.toString('base64')}`,
-              detail: 'high',
-            },
-          ],
-        }],
-      });
-      return parseReading(response.output_text);
-    } catch (error) {
-      console.error('OpenAI recognition failed:', error);
-      return unreadable();
-    }
+    const pngSignature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    // Upload validation has already restricted the image to JPEG or PNG.
+    const mimeType = image.subarray(0, pngSignature.length).equals(pngSignature) ? 'image/png' : 'image/jpeg';
+    const response = await this.client.responses.create({
+      model: 'gpt-4.1-mini',
+      text: {
+        format: { type: 'json_schema', name: 'odometer_reading', strict: true, schema: responseSchema },
+      },
+      input: [{
+        role: 'user',
+        content: [
+          { type: 'input_text', text: prompt },
+          {
+            type: 'input_image',
+            image_url: `data:${mimeType};base64,${image.toString('base64')}`,
+            detail: 'high',
+          },
+        ],
+      }],
+    });
+    return parseReading(response.output_text);
   }
 }

@@ -23,12 +23,15 @@ describe('OpenAiOcrProvider', () => {
     process.env = originalEnv;
   });
 
-  it('sends the supplied image to GPT-4.1-mini with the existing strict schema', async () => {
+  it.each([
+    { mimeType: 'image/jpeg', bytes: image, filename: 'dashboard.png' },
+    { mimeType: 'image/png', bytes: Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), filename: 'dashboard.jpeg' },
+  ])('sends $mimeType based on its signature to GPT-4.1-mini with the existing strict schema', async ({ mimeType, bytes, filename }) => {
     createResponse.mockResolvedValue({
       output_text: JSON.stringify({ reading: 123456, unit: 'miles', confidence: 'high' }),
     });
 
-    await new OpenAiOcrProvider().extractOdometerReading(image, 'dashboard.jpeg');
+    await new OpenAiOcrProvider().extractOdometerReading(bytes, filename);
 
     expect(createResponse).toHaveBeenCalledTimes(1);
     expect(createResponse).toHaveBeenCalledWith(expect.objectContaining({
@@ -39,7 +42,7 @@ describe('OpenAiOcrProvider', () => {
           content: expect.arrayContaining([
             expect.objectContaining({
               type: 'input_image',
-              image_url: 'data:image/jpeg;base64,' + image.toString('base64'),
+              image_url: `data:${mimeType};base64,${bytes.toString('base64')}`,
             }),
           ]),
         }),
@@ -92,8 +95,9 @@ describe('OpenAiOcrProvider', () => {
     await expect(new OpenAiOcrProvider().extractOdometerReading(image)).resolves.toEqual(unreadable);
   });
 
-  it('returns UNREADABLE_IMAGE when the SDK rejects the request', async () => {
-    createResponse.mockRejectedValue(new Error('SDK request failed'));
-    await expect(new OpenAiOcrProvider().extractOdometerReading(image)).resolves.toEqual(unreadable);
+  it('propagates SDK failures to the caller', async () => {
+    const error = new Error('SDK request failed');
+    createResponse.mockRejectedValue(error);
+    await expect(new OpenAiOcrProvider().extractOdometerReading(image)).rejects.toBe(error);
   });
 });
