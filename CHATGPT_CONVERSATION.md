@@ -1,10 +1,3 @@
-# Odometer Service Plan
-
-**User:** Anonymous  
-**Created:** 10/31/2026 10:08:58  
-**Updated:** 11/2/2026 15:53:33  
-**Exported:** 11/2/2026 16:03:32  
-
 ## Prompt:
 10/31/2026, 10:12:08 AM
 
